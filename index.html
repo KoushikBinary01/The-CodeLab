@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeCraft: Online C Compiler</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.32.1/min/vs/loader.min.js"></script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#"><i class="fas fa-code"></i> CodeCraft</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="showPage('editor')"><i class="fas fa-hammer"></i> Code Forge</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="showPage('problem-statements')"><i class="fas fa-tasks"></i> Problem Statements</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="showPage('contests')"><i class="fas fa-trophy"></i> Contests</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div id="editor-page" class="page">
+            <h2 class="mb-4"><i class="fas fa-hammer"></i> C Code Forge</h2>
+            <div id="problem-description" class="mb-4"></div>
+            <div class="row">
+                <div class="col-lg-8 mb-4">
+                    <div id="editor-container" class="shadow"></div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card shadow">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="fas fa-cogs"></i> Execution Panel</h5>
+                            <div class="mb-3">
+                                <label for="input-area" class="form-label">Input</label>
+                                <textarea id="input-area" class="form-control" rows="3" placeholder="Enter your input here..."></textarea>
+                            </div>
+                            <button id="run-button" class="btn btn-success w-100 mb-3">
+                                <i class="fas fa-play"></i> Run Code
+                            </button>
+                            <button id="submit-solution" class="btn btn-primary w-100 mb-3" style="display: none;">
+                                <i class="fas fa-paper-plane"></i> Submit Solution
+                            </button>
+                            <div id="execution-time" class="mb-3 text-muted"></div>
+                            <div id="output" class="output-panel p-3 bg-light text-dark rounded"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        
+
+        <div id="problem-statements-page" class="page">
+            <h2 class="mb-4"><i class="fas fa-tasks"></i> Problem Statements</h2>
+            <div id="problem-list" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4"></div>
+        </div>
+
+        <div id="contests-page" class="page">
+            <h2 class="mb-4"><i class="fas fa-trophy"></i> Contests</h2>
+            <div id="contest-list" class="row row-cols-1 row-cols-md-2 g-4"></div>
+            <div id="contest-creation-container" class="mt-4"></div>
+        </div>
+        
+        
+        
+    </div>
+
+    <footer class="bg-dark text-light py-4 mt-5">
+        <div class="container text-center">
+            <p>&copy; 2023 CodeCraft. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="editor.js"></script>
+</body>
+</html>
