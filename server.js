@@ -38,14 +38,17 @@ mongoose.connect('mongodb://localhost:27017/codingPlatform', { useNewUrlParser: 
         // Compile the code
         await execPromise(`gcc "${fullFilePath}" -o "${fullExecutablePath}"`);
 
-        // Run the compiled program
+        // Run the compiled program and measure execution time
+        const startTime = process.hrtime();
         const { stdout, stderr } = await execPromise(`"${fullExecutablePath}" < "${inputFileName}"`, { timeout: 5000 });
+        const endTime = process.hrtime(startTime);
+        const executionTime = (endTime[0] * 1000 + endTime[1] / 1000000).toFixed(2); // in milliseconds
 
         if (stderr) {
             throw new Error(`Runtime error: ${stderr}`);
         }
 
-        return { output: stdout.trim() };
+        return { output: stdout.trim(), executionTime: `${executionTime} ms` };
     } finally {
         // Clean up files
         try {
@@ -78,8 +81,10 @@ app.post('/api/submit', async (req, res) => {
 
         console.log('Problem found:', problem);
 
-        let totalScore = 0;
-        let passedAll = true;
+        let passedTestCases = 0;
+        let totalExecutionTime = 0;
+        const testCaseResults = [];
+        let allTestCasesPassed = true;
 
         for (let i = 0; i < problem.testCases.length; i++) {
             const testCase = problem.testCases[i];
@@ -96,23 +101,51 @@ app.post('/api/submit', async (req, res) => {
 
                 console.log('Expected output:', expectedOutput);
                 console.log('Actual output:', actualOutput);
+                console.log('Execution time:', result.executionTime);
 
-                if (expectedOutput === actualOutput) {
-                    totalScore += testCase.score || 1;
-                    console.log(`Test case ${i + 1} passed. Current score: ${totalScore}`);
+                totalExecutionTime += parseFloat(result.executionTime);
+
+                const passed = expectedOutput === actualOutput;
+                if (passed) {
+                    passedTestCases++;
                 } else {
-                    passedAll = false;
-                    console.log(`Test case ${i + 1} failed.`);
+                    allTestCasesPassed = false;
                 }
+
+                testCaseResults.push({
+                    testCaseNumber: i + 1,
+                    passed: passed,
+                    executionTime: result.executionTime,
+                    expectedOutput: expectedOutput,
+                    actualOutput: actualOutput
+                });
+
             } catch (error) {
                 console.error(`Error in test case ${i + 1}:`, error.message);
-                passedAll = false;
-                break; // Stop testing if there's a compilation or runtime error
+                allTestCasesPassed = false;
+                testCaseResults.push({
+                    testCaseNumber: i + 1,
+                    passed: false,
+                    error: error.message
+                });
             }
         }
 
-        console.log('Final result:', { passed: passedAll, score: totalScore });
-        res.json({ passed: passedAll, score: totalScore });
+        const totalTestCases = problem.testCases.length;
+        const score = Math.round((passedTestCases / totalTestCases) * 100);
+        const averageExecutionTime = (totalExecutionTime / totalTestCases).toFixed(2);
+
+        const result = {
+            passed: allTestCasesPassed,
+            totalTestCases: totalTestCases,
+            passedTestCases: passedTestCases,
+            score: score,
+            averageExecutionTime: `${averageExecutionTime} ms`,
+            testCaseResults: testCaseResults
+        };
+
+        console.log('Final result:', result);
+        res.json(result);
     } catch (error) {
         console.error('Error in submission:', error);
         res.status(500).json({ error: 'An error occurred during submission' });
