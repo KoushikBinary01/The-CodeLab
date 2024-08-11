@@ -22,8 +22,8 @@ mongoose.connect('mongodb://localhost:27017/codingPlatform', { useNewUrlParser: 
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('Could not connect to MongoDB', err));
 
-  app.post('/compile', async (req, res) => {
-    const { code, input } = req.body;
+
+  async function compileAndRun(code, input) {
     const fileName = `temp_${Date.now()}.c`;
     const executableName = `temp_${Date.now()}${os.platform() === 'win32' ? '.exe' : ''}`;
     const inputFileName = `input_${Date.now()}.txt`;
@@ -35,25 +35,19 @@ mongoose.connect('mongodb://localhost:27017/codingPlatform', { useNewUrlParser: 
         const fullFilePath = path.join(__dirname, fileName);
         const fullExecutablePath = path.join(__dirname, executableName);
         
-        try {
-            await execPromise(`gcc "${fullFilePath}" -o "${fullExecutablePath}"`);
-        } catch (compileError) {
-            return res.json({ error: `Compilation error: ${compileError.stderr}` });
-        }
+        // Compile the code
+        await execPromise(`gcc "${fullFilePath}" -o "${fullExecutablePath}"`);
 
-        const startTime = process.hrtime();
+        // Run the compiled program
         const { stdout, stderr } = await execPromise(`"${fullExecutablePath}" < "${inputFileName}"`, { timeout: 5000 });
-        const endTime = process.hrtime(startTime);
-        const executionTime = (endTime[0] * 1000 + endTime[1] / 1000000).toFixed(2);
 
         if (stderr) {
-            return res.json({ error: stderr });
+            throw new Error(`Runtime error: ${stderr}`);
         }
 
-        res.json({ output: stdout, executionTime: `${executionTime} ms` });
-    } catch (error) {
-        res.json({ error: error.message });
+        return { output: stdout.trim() };
     } finally {
+        // Clean up files
         try {
             await fs.unlink(fileName);
             await fs.unlink(executableName);
@@ -62,7 +56,69 @@ mongoose.connect('mongodb://localhost:27017/codingPlatform', { useNewUrlParser: 
             console.error('Error cleaning up files:', err);
         }
     }
+}
+
+app.post('/api/compile', async (req, res) => {
+    const { code, input } = req.body;
+    try {
+        const result = await compileAndRun(code, input);
+        res.json(result);
+    } catch (error) {
+        res.json({ error: error.message });
+    }
 });
+
+app.post('/api/submit', async (req, res) => {
+    const { problemId, code } = req.body;
+    try {
+        const problem = await Problem.findById(problemId);
+        if (!problem) {
+            return res.status(404).json({ error: 'Problem not found' });
+        }
+
+        console.log('Problem found:', problem);
+
+        let totalScore = 0;
+        let passedAll = true;
+
+        for (let i = 0; i < problem.testCases.length; i++) {
+            const testCase = problem.testCases[i];
+            console.log(`Running test case ${i + 1}:`, testCase);
+
+            try {
+                // Compile and run the code for each test case
+                const result = await compileAndRun(code, testCase.input);
+                console.log('Execution result:', result);
+
+                // Compare the result with the expected output
+                const expectedOutput = testCase.output.toString().trim();
+                const actualOutput = result.output.toString().trim();
+
+                console.log('Expected output:', expectedOutput);
+                console.log('Actual output:', actualOutput);
+
+                if (expectedOutput === actualOutput) {
+                    totalScore += testCase.score || 1;
+                    console.log(`Test case ${i + 1} passed. Current score: ${totalScore}`);
+                } else {
+                    passedAll = false;
+                    console.log(`Test case ${i + 1} failed.`);
+                }
+            } catch (error) {
+                console.error(`Error in test case ${i + 1}:`, error.message);
+                passedAll = false;
+                break; // Stop testing if there's a compilation or runtime error
+            }
+        }
+
+        console.log('Final result:', { passed: passedAll, score: totalScore });
+        res.json({ passed: passedAll, score: totalScore });
+    } catch (error) {
+        console.error('Error in submission:', error);
+        res.status(500).json({ error: 'An error occurred during submission' });
+    }
+});
+
 
 app.get('/api/problems', async (req, res) => {
     try {
@@ -106,67 +162,6 @@ app.get('/api/contests/:id', async (req, res) => {
     }
 });
 
-
-
-app.post('/api/submit', async (req, res) => {
-    const { problemId, code } = req.body;
-    const fileNameBase = `submission_${Date.now()}`;
-    const fileName = `${fileNameBase}.c`;
-    const executableName = os.platform() === 'win32' ? `${fileNameBase}.exe` : fileNameBase;
-    const fullFilePath = path.join(__dirname, fileName);
-    const fullExecutablePath = path.join(__dirname, executableName);
-
-    try {
-        const problem = await Problem.findById(problemId);
-        if (!problem) {
-            return res.status(404).json({ message: 'Problem not found' });
-        }
-
-        await fs.writeFile(fullFilePath, code);
-
-        try {
-            await execPromise(`gcc "${fullFilePath}" -o "${fullExecutablePath}"`);
-        } catch (compileError) {
-            return res.json({ passed: false, score: 0, message: 'Compilation error', error: compileError.message });
-        }
-
-        let totalScore = 0;
-        const maxScore = problem.testCases.length * 10;
-
-        for (let i = 0; i < problem.testCases.length; i++) {
-            const testCase = problem.testCases[i];
-            try {
-                const result = await runTestCase(fullExecutablePath, testCase.input);
-                const userOutput = result.trim();
-                const expectedOutput = testCase.output.trim();
-                if (userOutput === expectedOutput) {
-                    totalScore += 10;
-                }
-            } catch (runError) {
-                console.error(`Runtime Error in Test Case ${i + 1}:`, runError);
-                continue;
-            }
-        }
-
-        const scorePercentage = (totalScore / maxScore) * 100;
-        const passed = scorePercentage >= 70;
-
-        res.json({
-            passed,
-            score: scorePercentage.toFixed(2),
-            message: passed ? 'All test cases passed!' : 'Some test cases failed.'
-        });
-    } catch (error) {
-        res.status(500).json({ message: 'Error submitting solution', error: error.message });
-    } finally {
-        try {
-            await fs.unlink(fullFilePath);
-            await fs.unlink(fullExecutablePath);
-        } catch (cleanupError) {
-            console.error('Error cleaning up files:', cleanupError);
-        }
-    }
-});
 
 function runTestCase(executablePath, input) {
     return new Promise((resolve, reject) => {
