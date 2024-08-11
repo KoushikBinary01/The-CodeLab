@@ -1,11 +1,23 @@
 let editor;
 let currentProblemId = null;
 
+
+
 document.addEventListener('DOMContentLoaded', () => {
     setupEditor();
     setupNavigation();
-    fetchProblems();
-    fetchContests();
+    const submitButton = document.getElementById('submit-solution');
+    if (submitButton) {
+        submitButton.addEventListener('click', function() {
+            console.log('Submit button clicked');
+            submitSolution();
+        });
+        console.log('Submit button event listener attached');
+    } else {
+        console.error('Submit button not found in the DOM');
+    }
+
+    showPage('editor'); // Start with the editor page
 });
 
 function setupEditor() {
@@ -25,27 +37,42 @@ function setupEditor() {
 }
 
 function setupNavigation() {
-    window.showPage = function(pageId) {
-        document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-        document.getElementById(`${pageId}-page`).classList.add('active');
-
-        if (pageId === 'editor') {
-            if (editor) {
-                editor.layout();
-                if (!currentProblemId) {
-                    editor.setValue('#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}');
-                    document.getElementById('problem-description').innerHTML = '';
-                    document.getElementById('submit-solution').style.display = 'none';
-                }
+    document.querySelectorAll('.nav-link, [data-page]').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const pageId = this.getAttribute('data-page');
+            const shouldReset = this.getAttribute('data-reset') === 'true';
+            
+            if (shouldReset) {
+                resetEditorState();
             }
-        } else if (pageId === 'problem-statements') {
-            fetchProblems();
-            currentProblemId = null;
-        } else if (pageId === 'contests') {
-            fetchContests();
-            setupContestCreation();
+            
+            showPage(pageId);
+        });
+    });
+}
+
+function showPage(pageId) {
+    document.querySelectorAll('.page').forEach(page => page.style.display = 'none');
+    const selectedPage = document.getElementById(`${pageId}-page`);
+    if (selectedPage) {
+        selectedPage.style.display = 'block';
+    }
+
+    if (pageId === 'editor') {
+        if (editor) {
+            editor.layout();
+            // Reset editor state
+            editor.setValue('#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}');
+            document.getElementById('problem-description').innerHTML = '';
+            document.getElementById('submit-solution').style.display = 'none';
+            currentProblemId = null; // Reset the current problem
         }
-    };
+    } else if (pageId === 'problem-statements') {
+        fetchProblems();
+    } else if (pageId === 'contests') {
+        fetchContests();
+    }
 }
 
 function runCode() {
@@ -58,7 +85,7 @@ function runCode() {
     outputElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running...';
     executionTimeElement.textContent = '';
 
-    fetch('/compile', {
+    fetch('/api/compile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, input })
@@ -78,6 +105,29 @@ function runCode() {
     });
 }
 
+
+
+function showPage(pageId) {
+    document.querySelectorAll('.page').forEach(page => page.style.display = 'none');
+    const selectedPage = document.getElementById(`${pageId}-page`);
+    if (selectedPage) {
+        selectedPage.style.display = 'block';
+    }
+
+    if (pageId === 'editor') {
+        if (editor) {
+            editor.layout();
+        }
+        if (!currentProblemId) {
+            resetEditorState();
+        }
+    } else if (pageId === 'problem-statements') {
+        fetchProblems();
+    } else if (pageId === 'contests') {
+        fetchContests();
+    }
+}
+
 async function fetchProblems() {
     try {
         const response = await fetch('/api/problems');
@@ -88,8 +138,24 @@ async function fetchProblems() {
         displayProblems(problems);
     } catch (error) {
         console.error('Error fetching problems:', error);
+        document.getElementById('problem-list').innerHTML = '<p class="text-danger">Error loading problems. Please try again later.</p>';
     }
 }
+
+async function fetchContests() {
+    try {
+        const response = await fetch('/api/contests');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const contests = await response.json();
+        displayContests(contests);
+    } catch (error) {
+        console.error('Error fetching contests:', error);
+        document.getElementById('contest-list').innerHTML = '<p class="text-danger">Error loading contests. Please try again later.</p>';
+    }
+}
+
 
 function displayProblems(problems) {
     const problemList = document.getElementById('problem-list');
@@ -119,18 +185,22 @@ async function loadProblem(problemId) {
         }
         const problem = await response.json();
         displayProblemDetails(problem);
-        currentProblemId = problemId;
+        currentProblemId = problemId; // Make sure this line is present
+        showPage('editor');
     } catch (error) {
         console.error('Error loading problem:', error);
+        alert('Failed to load problem. Please try again.');
     }
 }
 
 function displayProblemDetails(problem) {
-    showPage('editor');
     document.querySelector('#editor-page h2').innerHTML = `<i class="fas fa-tasks"></i> ${problem.title}`;
     
     const problemDescription = document.getElementById('problem-description');
     problemDescription.innerHTML = `
+        <button class="btn btn-secondary mb-3" onclick="showPage('problem-statements')">
+            <i class="fas fa-arrow-left"></i> Back to Problems
+        </button>
         <h3>Problem Description</h3>
         <p>${problem.description}</p>
         <h4>Input Format</h4>
@@ -154,10 +224,13 @@ function displayProblemDetails(problem) {
 
 
 function submitSolution() {
+    
+    console.log('Submit button clicked');
     if (!currentProblemId) {
         alert('No problem selected');
         return;
     }
+    console.log('Current Problem ID:', currentProblemId);
 
     const code = editor.getValue();
     const submitButton = document.getElementById('submit-solution');
@@ -189,18 +262,6 @@ function submitSolution() {
 
 
 
-async function fetchContests() {
-    try {
-        const response = await fetch('/api/contests');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const contests = await response.json();
-        displayContests(contests);
-    } catch (error) {
-        console.error('Error fetching contests:', error);
-    }
-}
 
 function displayContests(contests) {
     const contestList = document.getElementById('contest-list');
@@ -303,3 +364,16 @@ function loadContest(contestId) {
     // Implement contest loading logic here
     console.log(`Loading contest: ${contestId}`);
 }
+
+function resetEditorState() {
+    if (editor) {
+        editor.setValue('#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}');
+    }
+    document.getElementById('problem-description').innerHTML = '';
+    document.getElementById('submit-solution').style.display = 'none';
+    document.querySelector('#editor-page h2').innerHTML = '<i class="fas fa-hammer"></i> C Code Forge';
+    currentProblemId = null;
+}
+
+
+
